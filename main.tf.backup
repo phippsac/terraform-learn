@@ -1,0 +1,68 @@
+provider "aws" {
+    region = "af-south-1"
+    access_key = "AKIAQUZIUMJABNQ3QFDX"
+    secret_key = "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"
+}
+
+# Create variable for cidr block
+variable "subnet_cidr_block" {
+    description = "subnet cidr block"
+}
+
+variable "vpc_cidr_block" {
+    description = "vpc cidr block"
+}
+
+# Create new vpc
+resource "aws_vpc" "terraform-vpc" {
+    cidr_block = var.vpc_cidr_block
+    tags = {
+        Name: "development",  
+        vpc_env: "dev"
+        }
+    }
+
+# Create new subnet within that vpc
+
+resource "aws_subnet" "terraform-vpc-subnet1" {
+    vpc_id = aws_vpc.terraform-vpc.id
+    cidr_block = var.subnet_cidr_block
+    availability_zone = "af-south-1a"
+    tags = {
+        Name: "subnet-1-dev"
+        }
+}
+
+# data allows you to query Data Sources from AWS 
+
+data "aws_vpc" "existing_vpc" {
+    default = "true"
+}
+
+resource "aws_subnet" "terraform-vpc-subnet2" {
+    vpc_id = data.aws_vpc.existing_vpc.id
+    cidr_block = "172.31.48.0/20"
+    availability_zone = "af-south-1a"
+    
+}
+
+output "dev-vpc-id" {
+    value = aws_vpc.terraform-vpc.id 
+}
+
+output "dev-subnet-vpc-id" {
+    value = aws_subnet.terraform-vpc-subnet1.id 
+}
+
+
+#resource "aws_subnet" "terraform-vpc-subnet2" {
+#    vpc_id = aws_vpc.terraform-vpc.id
+#    cidr_block = "10.0.128.0/17"
+#    availability_zone = "af-south-1b"
+#}
+#
+#resource "aws_subnet" "terraform-vpc-subnet3" {
+#    vpc_id = aws_vpc.terraform-vpc.id
+#    cidr_block = "10.128.0.0/17"
+#    availability_zone = "af-south-1c"
+#}
