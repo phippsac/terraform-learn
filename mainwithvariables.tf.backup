@@ -1,9 +1,6 @@
 provider "aws" {
     region = "af-south-1"
-    access_key = "AKIAQUZIUMJABNQ3QFDX"
-    secret_key = "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"
-}
-
+   
 # Create variables for cidr block
 variable "cidr_blocks" {
     description = "cidr blocks"
