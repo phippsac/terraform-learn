@@ -1,61 +1,153 @@
 provider "aws" {
     region = var.default_region
-}           
-
-variable default_region {}
-
-# Create variables for cidr block
-variable "cidr_blocks" {
-    description = "cidr blocks"
-    type = list(object({
-        cidr_block = string
-        name = string
-    }))
-}
             
+}           
+        
+variable default_region {}
+variable env_prefix {}       
+variable vpc_cidr_block {}  
+variable subnet_cidr_block {}
+variable avail_zone {}
+variable my_ip {}
+variable instance_type {}
+#variable my_public_key {}
+variable public_key_location {}
 
-
-# Create new vpc
-resource "aws_vpc" "terraform-vpc" {
-    cidr_block = var.cidr_blocks[0].cidr_block
+resource "aws_vpc" "myapp-vpc" {
+    cidr_block = var.vpc_cidr_block
     tags = {
-        Name: var.cidr_blocks[0].name,  
-        vpc_env: "dev"
-        }
+# variable inside a string
+        Name: "${var.env_prefix}-vpc"
+    }
+}
+
+resource  "aws_subnet" "myapp-subnet-1" {
+    vpc_id = aws_vpc.myapp-vpc.id 
+    cidr_block = var.subnet_cidr_block
+    availability_zone = var.avail_zone
+    tags = {
+        Name: "${var.env_prefix}-subnet-1"
+    }
+}
+
+resource "aws_internet_gateway" "myapp-igw" {
+    vpc_id = aws_vpc.myapp-vpc.id
+    tags = {
+        Name = "${var.env_prefix}-igw"
+    }
+}
+
+resource "aws_default_route_table"  "main-rtb" {
+    default_route_table_id = aws_vpc.myapp-vpc.default_route_table_id
+
+    route {
+        cidr_block = "0.0.0.0/0"
+        gateway_id = aws_internet_gateway.myapp-igw.id
+    }
+    tags = {
+        Name: "${var.env_prefix}-main-rtb"
+    }
+}
+
+resource "aws_default_security_group" "default-sg" {
+    vpc_id = aws_vpc.myapp-vpc.id
+
+#incoming fireall rule, from and to is a range of ports
+
+    ingress {
+        from_port = 22
+        to_port = 22
+        protocol = "tcp"
+        cidr_blocks = [var.my_ip]
+
+# just allow one ip
+#cidr_block = ["102.165.226.130/32"]
     }
 
-# Create new subnet within that vpc
+    ingress {
+        from_port = 8080
+        to_port = 8080
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+        
+    }
 
-resource "aws_subnet" "terraform-vpc-subnet1" {
-    vpc_id = aws_vpc.terraform-vpc.id
-    cidr_block = var.cidr_blocks[1].cidr_block
-    availability_zone = "af-south-1a"
-    tags = {
-        Name: "subnet-1-dev"
+    egress {
+        from_port = 0
+        to_port = 0
+# allow all protocols using -1 
+        protocol = "-1"
+        cidr_blocks = ["0.0.0.0/0"]
+        prefix_list_ids = []
         }
+
+    tags = {
+        Name: "${var.env_prefix}-default-sg"
+    }
 }
 
-# data allows you to query Data Sources from AWS 
-
-data "aws_vpc" "existing_vpc" {
-    default = "true"
-}
-
-resource "aws_subnet" "terraform-vpc-subnet2" {
-    vpc_id = data.aws_vpc.existing_vpc.id
-    cidr_block = "172.31.48.0/20"
-    availability_zone = "af-south-1a"
+data "aws_ami" "latest-amazon-linux-image"{
+    most_recent = true
+    owners = ["amazon"]
     
+    filter {
+        name = "name"
+        values = ["al2023-ami-*-x86_64"]
+    }
+
+    filter {  
+        name = "virtualization-type"
+        values = ["hvm"]
+    }
 }
 
-#resource "aws_subnet" "terraform-vpc-subnet2" {
-#    vpc_id = aws_vpc.terraform-vpc.id
-#    cidr_block = "10.0.128.0/17"
-#    availability_zone = "af-south-1b"
-#}
-#
-#resource "aws_subnet" "terraform-vpc-subnet3" {
-#    vpc_id = aws_vpc.terraform-vpc.id
-#    cidr_block = "10.128.0.0/17"
-#    availability_zone = "af-south-1c"
-#}
+output "aws_ami_id" {
+  value       = data.aws_ami.latest-amazon-linux-image.id
+
+}
+
+output "ec2_public_id" {
+  value = aws_instance.myapp-server.public_ip
+}
+
+resource "aws_instance" "myapp-server" {
+    ami = data.aws_ami.latest-amazon-linux-image.id
+    instance_type = var.instance_type
+
+    subnet_id = aws_subnet.myapp-subnet-1.id
+    vpc_security_group_ids = [aws_default_security_group.default-sg.id]
+    availability_zone = var.avail_zone
+
+    associate_public_ip_address = true
+    key_name = aws_key_pair.ssh-key.key_name
+
+    user_data = file("entryscript.sh")
+
+    tags = {
+        Name = "${var.env_prefix}-server"
+    }
+
+}
+
+resource "aws_key_pair" "ssh-key"{
+
+    key_name = "terra-server-key"
+    public_key = file(var.public_key_location)
+}
+
+# resource "aws_route_table" "myapp-route-table" {
+#     vpc_id = aws_vpc.myapp-vpc.id
+#     route {
+#         cidr_block = "0.0.0.0/0"
+#         gateway_id = aws_internet_gateway.myapp-igw.id
+#     }
+#     tags = {
+#         Name: "${var.env_prefix}-igw"
+#     }
+# }
+
+
+#  resource "aws_route_table_association" "a-rtb-subnet" {
+#             subnet_id = aws_subnet.myapp-subnet-1.id 
+#             route_table = aws_route_table.myapp-route-table.id        
+# }

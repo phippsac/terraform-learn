@@ -1,6 +1,6 @@
 provider "aws" {
     region = "af-south-1"
-    
+    }
 
 # Create variable for cidr block
 variable "subnet_cidr_block" {
