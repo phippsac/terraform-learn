@@ -8,3 +8,5 @@
 # ignore crash logs
 
 crash.log 
+
+.ssh/*
