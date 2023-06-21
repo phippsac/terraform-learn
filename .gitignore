@@ -9,4 +9,4 @@
 
 crash.log 
 
-.ssh/*
+/terraform_aws/.ssh/
