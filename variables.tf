@@ -1,0 +1,11 @@
+variable default_region {}
+variable avail_zone {}
+variable env_prefix {} 
+variable subnet_cidr_block {}      
+variable vpc_cidr_block {}  
+variable my_ip {}
+variable instance_type {}
+#variable my_public_key {}
+variable public_key_location {}
+variable private_key_location {}
+variable image_name {}

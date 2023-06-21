@@ -3,15 +3,6 @@ provider "aws" {
             
 }           
         
-variable default_region {}
-variable env_prefix {}       
-variable vpc_cidr_block {}  
-variable subnet_cidr_block {}
-variable avail_zone {}
-variable my_ip {}
-variable instance_type {}
-#variable my_public_key {}
-variable public_key_location {}
 
 resource "aws_vpc" "myapp-vpc" {
     cidr_block = var.vpc_cidr_block
@@ -21,119 +12,57 @@ resource "aws_vpc" "myapp-vpc" {
     }
 }
 
-resource  "aws_subnet" "myapp-subnet-1" {
+#variables mentioned here need to be defined in same directory as main.tf, so variables.tf, they in turn
+#get their values from terraform.tfvars file
+
+#variables can als0 be referenced from resource i.e aws_vpc.myapp-vpc.id 
+
+module "myapp-subnet" {
+    source = "./modules/subnet"
+    subnet_cidr_block = var.subnet_cidr_block
+    avail_zone = var.avail_zone
+    env_prefix = var.env_prefix
     vpc_id = aws_vpc.myapp-vpc.id 
-    cidr_block = var.subnet_cidr_block
-    availability_zone = var.avail_zone
-    tags = {
-        Name: "${var.env_prefix}-subnet-1"
-    }
-}
-
-resource "aws_internet_gateway" "myapp-igw" {
-    vpc_id = aws_vpc.myapp-vpc.id
-    tags = {
-        Name = "${var.env_prefix}-igw"
-    }
-}
-
-resource "aws_default_route_table"  "main-rtb" {
     default_route_table_id = aws_vpc.myapp-vpc.default_route_table_id
-
-    route {
-        cidr_block = "0.0.0.0/0"
-        gateway_id = aws_internet_gateway.myapp-igw.id
-    }
-    tags = {
-        Name: "${var.env_prefix}-main-rtb"
-    }
 }
 
-resource "aws_default_security_group" "default-sg" {
+
+
+module "myapp-server" {
+    source = "./modules/webserver"
     vpc_id = aws_vpc.myapp-vpc.id
-
-#incoming fireall rule, from and to is a range of ports
-
-    ingress {
-        from_port = 22
-        to_port = 22
-        protocol = "tcp"
-        cidr_blocks = [var.my_ip]
-
-# just allow one ip
-#cidr_block = ["102.165.226.130/32"]
-    }
-
-    ingress {
-        from_port = 8080
-        to_port = 8080
-        protocol = "tcp"
-        cidr_blocks = ["0.0.0.0/0"]
-        
-    }
-
-    egress {
-        from_port = 0
-        to_port = 0
-# allow all protocols using -1 
-        protocol = "-1"
-        cidr_blocks = ["0.0.0.0/0"]
-        prefix_list_ids = []
-        }
-
-    tags = {
-        Name: "${var.env_prefix}-default-sg"
-    }
-}
-
-data "aws_ami" "latest-amazon-linux-image"{
-    most_recent = true
-    owners = ["amazon"]
-    
-    filter {
-        name = "name"
-        values = ["al2023-ami-*-x86_64"]
-    }
-
-    filter {  
-        name = "virtualization-type"
-        values = ["hvm"]
-    }
-}
-
-output "aws_ami_id" {
-  value       = data.aws_ami.latest-amazon-linux-image.id
-
-}
-
-output "ec2_public_id" {
-  value = aws_instance.myapp-server.public_ip
-}
-
-resource "aws_instance" "myapp-server" {
-    ami = data.aws_ami.latest-amazon-linux-image.id
+    my_ip = var.my_ip
+    env_prefix = var.env_prefix
+    image_name = var.image_name
+    public_key_location = var.public_key_location
     instance_type = var.instance_type
-
-    subnet_id = aws_subnet.myapp-subnet-1.id
-    vpc_security_group_ids = [aws_default_security_group.default-sg.id]
-    availability_zone = var.avail_zone
-
-    associate_public_ip_address = true
-    key_name = aws_key_pair.ssh-key.key_name
-
-    user_data = file("entryscript.sh")
-
-    tags = {
-        Name = "${var.env_prefix}-server"
-    }
-
+    subnet_id = module.myapp-subnet.subnet.id
+    avail_zone = var.avail_zone
 }
 
-resource "aws_key_pair" "ssh-key"{
 
-    key_name = "terra-server-key"
-    public_key = file(var.public_key_location)
-}
+    # connection {
+    #     type = "ssh"
+    #     host = self.public_ip
+    #     user = "ec2-user"
+    #     private_key = file(var.private_key_location)
+
+    # }
+
+    # provisioner "file" {
+    #     source = "entryscript.sh"
+    #     destination = "/home/ec2-user/entry-script.sh"
+    # }
+
+    # provisioner "remote-exec" {
+    #     script = file("entryscript.sh")
+    # }
+
+    # provisioner "local-exec" {
+    #     command = "echo ${self.public_ip} > /root/output.txt"
+    # }
+
+
 
 # resource "aws_route_table" "myapp-route-table" {
 #     vpc_id = aws_vpc.myapp-vpc.id
